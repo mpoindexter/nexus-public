@@ -26,10 +26,13 @@ import org.sonatype.nexus.repository.view.Request;
 import org.sonatype.nexus.repository.view.Response;
 import org.sonatype.nexus.repository.view.Status;
 
+import com.google.common.base.Predicate;
 import com.google.common.collect.Range;
 import com.google.common.net.HttpHeaders;
 
 import static com.google.common.base.Preconditions.checkNotNull;
+
+import static org.sonatype.nexus.repository.http.HttpConditions.requestRangePredicate;
 
 /**
  * Implements partial-fetch semantics (as per RFC 2616) for {@link Status#isSuccessful() successful}
@@ -79,6 +82,12 @@ public class PartialFetchHandler
       return response;
     }
 
+    // Check If-Range header, and skip range processing if it fails
+    final Predicate<Response> requestPredicate = requestRangePredicate(context.getRequest());
+    if (requestPredicate != null && !requestPredicate.apply(response)) {
+      return response;
+    }
+
     final List<Range<Long>> ranges = rangeParser.parseRangeSpec(rangeHeader, payload.getSize());
 
     if (ranges == null) {
@@ -117,7 +126,7 @@ public class PartialFetchHandler
 
     // ResponseSender takes care of Content-Length header, via payload.size
     builder.header(HttpHeaders.CONTENT_RANGE,
-        requestedRange.lowerEndpoint() + "-" + requestedRange.upperEndpoint() + "/" + payload.getSize());
+        "bytes " + requestedRange.lowerEndpoint() + "-" + requestedRange.upperEndpoint() + "/" + payload.getSize());
 
     return builder.build();
   }
