@@ -126,6 +126,17 @@ public class HttpConditions
     return null;
   }
 
+    /**
+   * Builds a {@link Predicate} that contains conditions in passed in {@link Request} or {@code null} if
+   * request does not contains any condition. The predicate applies to {@link Response} if it meets all the conditions
+   * found (they all are logically AND bound).
+   */
+  @Nullable
+  public static Predicate<Response> requestRangePredicate(@Nonnull final Request request) {
+    checkNotNull(request);
+    return ifRange(request);
+  }
+
   @Nullable
   private static Predicate<Response> ifModifiedSince(final Request request) {
     final DateTime date = parseDateHeader(request.getHeaders().get(HttpHeaders.IF_MODIFIED_SINCE));
@@ -218,6 +229,50 @@ public class HttpConditions
           return HttpConditions.class.getSimpleName() + ".ifNoneMatch(" + match + ")";
         }
       };
+    }
+    return null;
+  }
+
+  @Nullable
+  private static Predicate<Response> ifRange(final Request request) {
+    final String ifRange = request.getHeaders().get(HttpHeaders.IF_RANGE);
+    if (ifRange != null && ifRange.startsWith("\"")) {
+      return new Predicate<Response>()
+      {
+        @Override
+        public boolean apply(final Response response) {
+          final String etag = response.getHeaders().get(HttpHeaders.ETAG);
+          if (etag != null) {
+            return ifRange.equals(etag);
+          }
+          return false;
+        }
+
+        @Override
+        public String toString() {
+          return HttpConditions.class.getSimpleName() + ".ifRange(" + ifRange + ")";
+        }
+      };
+    } else if (ifRange != null) {
+      final DateTime date = parseDateHeader(ifRange);
+      if (date != null) {
+        return new Predicate<Response>()
+        {
+          @Override
+          public boolean apply(final Response response) {
+            final DateTime lastModified = parseDateHeader(response.getHeaders().get(HttpHeaders.LAST_MODIFIED));
+            if (lastModified != null) {
+              return lastModified.equals(date);
+            }
+            return false;
+          }
+  
+          @Override
+          public String toString() {
+            return HttpConditions.class.getSimpleName() + ".ifRange(" + date + ")";
+          }
+        };
+      }
     }
     return null;
   }
